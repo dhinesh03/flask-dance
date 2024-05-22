@@ -57,6 +57,7 @@ class OAuth2ConsumerBlueprint(BaseOAuthConsumerBlueprint):
         rule_kwargs=None,
         use_pkce=False,
         code_challenge_method="S256",
+        redirect_uri_func=None,
         **kwargs,
     ):
         """
@@ -122,6 +123,7 @@ class OAuth2ConsumerBlueprint(BaseOAuthConsumerBlueprint):
             code_challenge_method: Code challenge method to be used in authorization code flow with PKCE
                 instead of client secret. It will be used only if ``use_pkce`` is set to True.
                 Defaults to ``S256``.
+            redirect_uri: The URL to redirect to after the OAuth authentication is complete default is url_for(".authorized")
         """
         BaseOAuthConsumerBlueprint.__init__(
             self,
@@ -162,6 +164,7 @@ class OAuth2ConsumerBlueprint(BaseOAuthConsumerBlueprint):
         self.redirect_to = redirect_to
         self.code_challenge_method = code_challenge_method
         self.use_pkce = use_pkce
+        self.redirect_uri_func = redirect_uri_func
 
         self.teardown_app_request(self.teardown_session)
 
@@ -212,7 +215,10 @@ class OAuth2ConsumerBlueprint(BaseOAuthConsumerBlueprint):
 
     def login(self):
         log.debug("client_id = %s", self.client_id)
-        self.session.redirect_uri = url_for(".authorized", _external=True)
+        if self.redirect_uri_func:
+            self.session.redirect_uri = self.redirect_uri_func()
+        else:
+            self.session.redirect_uri = url_for(".authorized", _external=True)
         if self.use_pkce:
             code_verifier = generate_token(length=48)
             code_challenge = self.session._client.create_code_challenge(
@@ -296,7 +302,10 @@ class OAuth2ConsumerBlueprint(BaseOAuthConsumerBlueprint):
             del flask.session[code_verifier_key]
             self.token_url_params["code_verifier"] = code_verifier
 
-        self.session.redirect_uri = url_for(".authorized", _external=True)
+        if self.redirect_uri_func:
+            self.session.redirect_uri = self.redirect_uri_func()
+        else:
+            self.session.redirect_uri = url_for(".authorized", _external=True)
 
         log.debug("client_id = %s", self.client_id)
         log.debug("client_secret = %s", self.client_secret)
